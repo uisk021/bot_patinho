@@ -1,164 +1,147 @@
-// ============================================
-// 🐤 PATINHO — RÁDIO HABBLER
-// ============================================
+/* Patinho • Rádio Habbler | interações do fan-site */
+(function () {
+  "use strict";
 
-// ========== 📻 PLAYER ORBITAL ==========
-const audio = document.getElementById("radio-audio");
-const btnPlay = document.getElementById("btn-play");
-const iconPlay = document.getElementById("icon-play");
-const iconPause = document.getElementById("icon-pause");
-const radioStatus = document.getElementById("radio-status");
-const orbitalRings = document.getElementById("orbital-rings");
+  const byId = (id) => document.getElementById(id);
+  const audio = byId("radio-audio");
+  const playButton = byId("btn-play");
+  const playIcon = byId("icon-play");
+  const pauseIcon = byId("icon-pause");
+  const radioStatus = byId("radio-status");
+  const radioPanel = document.querySelector(".radio-panel");
+  const volume = byId("volume");
 
-function toggleRadio() {
-    if (audio.paused) {
-        audio.play().then(function () {
-            iconPlay.style.display = "none";
-            iconPause.style.display = "block";
-            btnPlay.classList.add("tocando");
-            orbitalRings.classList.add("ativo");
-            radioStatus.textContent = "Ao vivo";
-        }).catch(function () {
-            radioStatus.textContent = "Erro ao conectar";
-        });
-    } else {
+  function setPlayerState(playing, message) {
+    if (!playButton) return;
+    playIcon.hidden = playing;
+    pauseIcon.hidden = !playing;
+    playButton.setAttribute("aria-label", playing ? "Pausar rádio" : "Tocar rádio");
+    radioPanel.classList.toggle("playing", playing);
+    if (message) radioStatus.textContent = message;
+  }
+
+  if (audio && playButton) {
+    audio.volume = Number(volume.value) / 100;
+    playButton.addEventListener("click", async () => {
+      if (!audio.paused) {
         audio.pause();
-        iconPlay.style.display = "block";
-        iconPause.style.display = "none";
-        btnPlay.classList.remove("tocando");
-        orbitalRings.classList.remove("ativo");
-        radioStatus.textContent = "Pausado";
-    }
-}
+        setPlayerState(false, "Rádio pausada");
+        return;
+      }
+      radioStatus.textContent = "Conectando à rádio…";
+      try {
+        await audio.play();
+        setPlayerState(true, "Ao vivo agora");
+      } catch (error) {
+        setPlayerState(false, "Não foi possível iniciar");
+        console.warn("Falha no player de rádio:", error);
+      }
+    });
+    audio.addEventListener("ended", () => setPlayerState(false, "Rádio encerrada"));
+    audio.addEventListener("error", () => setPlayerState(false, "Erro ao conectar"));
+    volume.addEventListener("input", () => { audio.volume = Number(volume.value) / 100; });
+  }
 
-function mudarVolume(valor) {
-    audio.volume = valor / 100;
-}
+  const mainNav = byId("main-nav");
+  const menuButton = byId("menu-button");
+  if (menuButton && mainNav) {
+    menuButton.addEventListener("click", () => {
+      const open = mainNav.classList.toggle("open");
+      menuButton.setAttribute("aria-expanded", String(open));
+    });
+    mainNav.querySelectorAll("a").forEach((link) => link.addEventListener("click", () => {
+      mainNav.classList.remove("open");
+      menuButton.setAttribute("aria-expanded", "false");
+    }));
+  }
 
-audio.volume = 0.7;
-
-
-// ========== 📊 STATUS DO BOT ==========
-async function atualizarStatus() {
+  async function atualizarStatus() {
     try {
-        const resp = await fetch("/api/status");
-        const d = await resp.json();
-
-        const badge = document.getElementById("status-badge");
-        if (d.online) {
-            badge.className = "status-badge online";
-            badge.innerHTML = '<span class="dot"></span><span class="badge-text">Online</span>';
-        } else {
-            badge.className = "status-badge offline";
-            badge.innerHTML = '<span class="dot"></span><span class="badge-text">Offline</span>';
-        }
-
-        document.getElementById("stat-online").textContent = d.online ? "Online" : "Offline";
-        document.getElementById("stat-servidores").textContent = (d.servidores || 0).toLocaleString("pt-BR");
-        document.getElementById("stat-usuarios").textContent = (d.usuarios || 0).toLocaleString("pt-BR");
-        document.getElementById("stat-comandos").textContent = (d.comandos_total || 0).toLocaleString("pt-BR");
-        document.getElementById("stat-ping").textContent = (d.ultimo_ping || 0) + "ms";
-        document.getElementById("last-seen").textContent = "Última atualização: " + (d.last_seen || "--");
-    } catch (e) {
-        console.error("Erro status:", e);
+      const response = await fetch("/api/status", { cache: "no-store" });
+      if (!response.ok) throw new Error("status indisponível");
+      const data = await response.json();
+      const online = Boolean(data.online);
+      byId("stat-online").textContent = online ? "ao vivo" : "pausado";
+      byId("stat-servidores").textContent = (data.servidores || 0).toLocaleString("pt-BR");
+      byId("stat-usuarios").textContent = (data.usuarios || 0).toLocaleString("pt-BR");
+      byId("stat-comandos").textContent = (data.comandos_total || 0).toLocaleString("pt-BR");
+      byId("stat-ping").textContent = `${data.ultimo_ping || 0}ms`;
+      byId("last-seen").textContent = data.last_seen
+        ? `Última atualização: ${data.last_seen}`
+        : (online ? "Patinho conectado à comunidade" : "Aguardando o Patinho conectar");
+      byId("status-orb").classList.toggle("online", online);
+    } catch (error) {
+      byId("stat-online").textContent = "indisponível";
+      byId("last-seen").textContent = "Não foi possível consultar o status agora.";
     }
-}
-setInterval(atualizarStatus, 5000);
-atualizarStatus();
+  }
 
+  let rankingAtual = "xp";
+  const escapeHtml = (value) => String(value || "Morador").replace(/[&<>'"]/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#039;", '"': "&quot;"
+  }[char]));
 
-// ========== 🏆 RANKING ==========
-let rankingAtual = "xp";
+  function medalha(position) {
+    if (position === 1) return "🥇";
+    if (position === 2) return "🥈";
+    if (position === 3) return "🥉";
+    return String(position).padStart(2, "0");
+  }
 
-async function carregarRanking(tipo) {
+  async function carregarRanking(tipo) {
     rankingAtual = tipo;
-    const tbody = document.getElementById("ranking-body");
-    const colValor = document.getElementById("col-valor");
-
+    const body = byId("ranking-body");
+    const col = byId("col-valor");
+    col.textContent = tipo === "xp" ? "XP" : "Moedas";
+    body.innerHTML = '<p class="loading">Atualizando placar…</p>';
     try {
-        const resp = await fetch("/api/ranking/" + tipo);
-        const dados = await resp.json();
-
-        if (!dados || dados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" class="loading">Nenhum dado ainda 🐤</td></tr>';
-            return;
-        }
-
-        colValor.textContent = tipo === "xp" ? "XP" : "Moedas";
-        let html = "";
-
-        dados.forEach(function (user, i) {
-            const pos = i + 1;
-            let medalha = pos;
-            let cls = "";
-            if (pos === 1) { medalha = "🥇"; cls = "medalha-1"; }
-            else if (pos === 2) { medalha = "🥈"; cls = "medalha-2"; }
-            else if (pos === 3) { medalha = "🥉"; cls = "medalha-3"; }
-
-            const valor = tipo === "xp" ? user.xp : user.saldo;
-            const avatarUrl = "https://imaging.habblet.city/avatarimage?user=" +
-                encodeURIComponent(user.user_name) + "&head_direction=3&headonly=1&size=s";
-
-            html += '<tr>' +
-                '<td class="' + cls + '">' + medalha + '</td>' +
-                '<td style="display:flex;align-items:center;gap:10px;">' +
-                    '<img src="' + avatarUrl + '" onerror="this.style.display=\'none\'" ' +
-                         'style="width:28px;height:28px;border-radius:50%;background:rgba(139,92,246,0.1);">' +
-                    '<span>' + user.user_name + '</span>' +
-                '</td>' +
-                '<td>' + (valor || 0).toLocaleString("pt-BR") + '</td>' +
-            '</tr>';
-        });
-
-        tbody.innerHTML = html;
-    } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="3" class="loading">Erro ao carregar 😢</td></tr>';
+      const response = await fetch(`/api/ranking/${tipo}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("ranking indisponível");
+      const dados = await response.json();
+      if (!Array.isArray(dados) || dados.length === 0) {
+        body.innerHTML = '<p class="loading">Ainda não há moradores no placar. Que tal ser o primeiro? 🐤</p>';
+        return;
+      }
+      body.innerHTML = dados.slice(0, 10).map((user, index) => {
+        const name = escapeHtml(user.user_name || `Morador ${index + 1}`);
+        const value = Number(tipo === "xp" ? user.xp : user.saldo) || 0;
+        const avatar = `https://imaging.habblet.city/avatarimage?user=${encodeURIComponent(user.user_name || "Habblet")}&head_direction=3&headonly=1&size=s`;
+        return `<div class="ranking-row">
+          <span class="rank-place">${medalha(index + 1)}</span>
+          <span class="rank-user"><img src="${avatar}" alt="" onerror="this.style.visibility='hidden'"><span>${name}</span></span>
+          <span class="rank-value">${value.toLocaleString("pt-BR")}</span>
+        </div>`;
+      }).join("");
+    } catch (error) {
+      body.innerHTML = '<p class="loading">Não foi possível carregar o placar agora.</p>';
     }
-}
+  }
 
-function mostrarRanking(event, tipo) {
-    document.querySelectorAll(".tab-btn").forEach(function (b) {
-        b.classList.remove("ativo");
+  document.querySelectorAll("[data-ranking]").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.querySelectorAll("[data-ranking]").forEach((tab) => tab.classList.remove("ativo"));
+      button.classList.add("ativo");
+      carregarRanking(button.dataset.ranking);
     });
-    if (event && event.currentTarget) {
-        event.currentTarget.classList.add("ativo");
-    }
-    carregarRanking(tipo);
-}
+  });
 
-carregarRanking("xp");
-setInterval(function () { carregarRanking(rankingAtual); }, 30000);
+  const news = Array.from(document.querySelectorAll("[data-news]"));
+  let newsIndex = 0;
+  const counter = byId("news-counter");
+  function showNews(index) {
+    if (!news.length) return;
+    newsIndex = (index + news.length) % news.length;
+    counter.textContent = `${newsIndex + 1} de ${news.length}`;
+    news.forEach((card, position) => card.classList.toggle("focus-news", position === newsIndex));
+    const featured = news[newsIndex];
+    featured.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  }
+  byId("news-prev")?.addEventListener("click", () => showNews(newsIndex - 1));
+  byId("news-next")?.addEventListener("click", () => showNews(newsIndex + 1));
 
-
-// ========== ✨ ANIMAÇÕES AO SCROLL ==========
-const observer = new IntersectionObserver(function (entries) {
-    entries.forEach(function (entry) {
-        if (entry.isIntersecting) {
-            entry.target.classList.add("visible");
-        }
-    });
-}, { threshold: 0.1 });
-
-document.querySelectorAll(".fade-in").forEach(function (el) {
-    observer.observe(el);
-});
-
-
-// ========== 📱 MENU MOBILE ==========
-function toggleMenu() {
-    const links = document.querySelector(".nav-links");
-    if (links.style.display === "flex") {
-        links.style.display = "none";
-    } else {
-        links.style.display = "flex";
-        links.style.flexDirection = "column";
-        links.style.position = "absolute";
-        links.style.top = "70px";
-        links.style.left = "0";
-        links.style.right = "0";
-        links.style.background = "rgba(5,5,8,0.95)";
-        links.style.padding = "20px 30px";
-        links.style.gap = "16px";
-        links.style.borderBottom = "1px solid rgba(139,92,246,0.12)";
-    }
-}
+  byId("current-year").textContent = new Date().getFullYear();
+  atualizarStatus();
+  carregarRanking("xp");
+  window.setInterval(atualizarStatus, 10000);
+  window.setInterval(() => carregarRanking(rankingAtual), 45000);
+})();
