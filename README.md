@@ -2,24 +2,18 @@
 
 Bot Discord com portal web, economia, jogos, tickets, verificação, moderação e rádio/música.
 
-## Render — configuração
+## Hospedagem — configuração
 
-1. Crie um **Web Service** a partir da pasta deste projeto.
-2. Use o Build Command:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Use o Start Command:
-   ```bash
-   python bot.py
-   ```
-4. Em **Environment**, configure as variáveis secretas:
+1. Use a pasta deste projeto como raiz da hospedagem.
+2. O `Dockerfile` incluído fixa Python 3.11 e instala o FFmpeg, evitando erros do instalador automático.
+3. Em Railway, mantenha o **Build Command** vazio e o **Start Command** vazio: o Dockerfile executa `python bot.py`.
+4. Em **Variables/Environment**, configure as variáveis secretas:
    - `DISCORD_TOKEN`
    - `MONGO_URI`
 
 Não coloque essas credenciais no GitHub, `config.json` ou no código.
 
-> Se este projeto for usado no repositório `botteste` atual, defina **Root Directory** como `bot-radio-habbler-main` no Render. O arquivo `bot.py` está dentro dessa pasta.
+> Se os arquivos estiverem dentro de uma subpasta do GitHub, defina a **Root Directory** da hospedagem com o nome exato dessa subpasta.
 
 ## Discord Developer Portal
 
